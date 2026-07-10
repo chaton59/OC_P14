@@ -46,3 +46,8 @@ projet/
 docs/COURS_DU_CODE.md
 scripts/retrain_all.sh
 scripts/retrain_v3.sh
+scripts/demo_triage.py
+scripts/inject_results.py
+notebooks/
+reports/AUDIT_*.md
+reports/CHECKLIST_MISSION.md

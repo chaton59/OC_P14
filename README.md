@@ -59,8 +59,7 @@ OC_P14/
 ├── models/                 # poids & adaptateurs entraînés
 ├── deploy/                 # Dockerfile, docker-compose, config vLLM
 ├── tests/                  # tests unitaires (pytest)
-├── notebooks/              # exploration des données
-├── reports/                # rapport technique
+├── reports/                # rapport technique, RGPD, sources, métriques
 └── .github/workflows/      # pipelines CI/CD
 ```
 
