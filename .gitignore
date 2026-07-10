@@ -38,6 +38,9 @@ mlruns/
 # ---- Caches Hugging Face locaux éventuels ----
 .cache/
 
+# ---- Dossier de livraison assemblé (copie, jamais versionné) ----
+LIVRABLE/
+
 # ---- Contenus hors livrable (restent en local, non publiés) ----
 projet/
 docs/COURS_DU_CODE.md
