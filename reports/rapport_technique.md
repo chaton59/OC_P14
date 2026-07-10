@@ -142,6 +142,10 @@ exactitude des préférences (`rewards/accuracies`) **0.83** · marge de récomp
 (`rewards/margins`) **+2.81** → le modèle distingue nettement la bonne réponse
 de la mauvaise.
 
+Les **poids finaux fusionnés** (livrable 2) sont publiés sur le Hugging Face
+Hub : [`ASI-Engineer/chsa-triage-qwen3-1.7b`](https://huggingface.co/ASI-Engineer/chsa-triage-qwen3-1.7b)
+(dépôt privé, accès sur demande).
+
 > **Deux notes d'ingénierie, tracées à dessein.**
 > 1. **OOM.** Un premier run DPO a saturé les 12 Go : la taille de batch
 >    d'évaluation par défaut (8) provoquait un pic mémoire. Corrigé via

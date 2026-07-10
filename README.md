@@ -167,6 +167,20 @@ CI/CD est décrit dans `.github/workflows/`.
 
 ---
 
+## 🧠 Poids du modèle (livrable)
+
+Les **poids finaux fusionnés** (Qwen3-1.7B + SFT LoRA + DPO, ~3,3 Go) sont
+publiés sur le Hugging Face Hub, en dépôt **privé** (accès sur demande) :
+**[ASI-Engineer/chsa-triage-qwen3-1.7b](https://huggingface.co/ASI-Engineer/chsa-triage-qwen3-1.7b)**
+
+```bash
+# Récupérer les poids sans ré-entraîner (après `hf auth login`) :
+uv run hf download ASI-Engineer/chsa-triage-qwen3-1.7b \
+    --local-dir models/qwen3-triage-merged
+```
+
+---
+
 ## 📄 Rapport technique
 
 Le rapport de synthèse (méthodologie, métriques, analyse, roadmap) est dans

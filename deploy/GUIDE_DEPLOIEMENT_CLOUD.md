@@ -15,25 +15,31 @@
    local n'a aucun commit) :
 
    ```bash
-   git commit -m "POC agent de triage médical CHSA (SFT LoRA + DPO + API vLLM)"
-   git remote add origin git@github.com:<votre-compte>/OC_P14.git
-   git push -u origin master
+   git remote add origin https://github.com/chaton59/OC_P14.git
+   git push -u origin main
    ```
+
+   > ✅ Fait le 10/07/2026 : https://github.com/chaton59/OC_P14
 
 2. Vérifier que les 2 workflows passent au vert dans l'onglet *Actions* :
    * `ci.yml` → lint + tests ;
-   * `deploy.yml` → construit et publie `ghcr.io/<compte>/oc_p14-api:master`.
+   * `deploy.yml` → construit et publie `ghcr.io/chaton59/oc_p14-api:main`.
+
+   > ✅ Fait le 10/07/2026 : CI verte, image publiée.
 
 3. **Publier les poids du modèle fusionné** (3,3 Go — trop lourd pour git) sur
-   le Hugging Face Hub, en dépôt privé :
+   le Hugging Face Hub, en dépôt privé (CLI `hf`, ex-`huggingface-cli`) :
 
    ```bash
-   uv run huggingface-cli login
-   uv run huggingface-cli upload <compte>/chsa-triage-qwen3-1.7b \
-       models/qwen3-triage-merged --private
+   uv run hf auth login
+   uv run hf upload ASI-Engineer/chsa-triage-qwen3-1.7b \
+       models/qwen3-triage-merged . --private
    ```
 
-   > Alternative sans HF : `scp -r models/qwen3-triage-merged` vers la VM.
+   > ✅ Fait le 10/07/2026 :
+   > https://huggingface.co/ASI-Engineer/chsa-triage-qwen3-1.7b
+   > (privé — accès sur demande). Alternative sans HF :
+   > `scp -r models/qwen3-triage-merged` vers la VM.
 
 ---
 
@@ -61,10 +67,10 @@ VRAM ; toute instance L4 / T4 / A10 / RTX 4000 convient.
 2. **Récupérer le dépôt et les poids** :
 
    ```bash
-   git clone https://github.com/<compte>/OC_P14.git && cd OC_P14
+   git clone https://github.com/chaton59/OC_P14.git && cd OC_P14
    # Poids depuis HF (dépôt privé → token) :
-   pip install -U "huggingface_hub[cli]" && huggingface-cli login
-   huggingface-cli download <compte>/chsa-triage-qwen3-1.7b \
+   pip install -U "huggingface_hub[cli]" && hf auth login
+   hf download ASI-Engineer/chsa-triage-qwen3-1.7b \
        --local-dir models/qwen3-triage-merged
    ```
 
@@ -73,7 +79,7 @@ VRAM ; toute instance L4 / T4 / A10 / RTX 4000 convient.
    ```bash
    docker compose -f deploy/docker-compose.yml up -d --build
    # ou, pour utiliser l'image déjà publiée par la CI au lieu de rebuilder :
-   #   remplacer `build:` par `image: ghcr.io/<compte>/oc_p14-api:master`
+   #   remplacer `build:` par `image: ghcr.io/chaton59/oc_p14-api:main`
    ```
 
 4. **Vérifier** :
@@ -121,7 +127,7 @@ Idéal pour une soutenance : on loue le GPU 1-2 h.
      -e TRIAGE_INFERENCE_BACKEND=vllm \
      -e TRIAGE_VLLM_BASE_URL=http://<ip-du-pod>:8000/v1 \
      -e TRIAGE_VLLM_MODEL_NAME=chsa-triage \
-     ghcr.io/<compte>/oc_p14-api:master
+     ghcr.io/chaton59/oc_p14-api:main
    ```
 
 3. L'URL publique du pod (proxy RunPod) sert la démo : `…/ui`, `…/docs`.
