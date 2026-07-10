@@ -1,0 +1,45 @@
+# ---- Environnements Python ----
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+
+# ---- Données (volumineuses, régénérables par le pipeline) ----
+# On versionne la STRUCTURE (via .gitkeep) mais pas les fichiers de données.
+data/raw/*
+data/interim/*
+data/processed/sft/*
+data/processed/dpo/*
+data/eval/*
+!data/**/.gitkeep
+
+# ---- Modèles & checkpoints (lourds : stockés hors git) ----
+models/*
+!models/.gitkeep
+outputs/
+runs/
+*.safetensors
+*.bin
+
+# ---- Logs & artefacts d'entraînement ----
+logs/
+*.log
+wandb/
+mlruns/
+
+# ---- Secrets ----
+.env
+.env.*
+!.env.example
+
+# ---- Caches Hugging Face locaux éventuels ----
+.cache/
+
+# ---- Contenus hors livrable (restent en local, non publiés) ----
+projet/
+docs/COURS_DU_CODE.md
+scripts/retrain_all.sh
+scripts/retrain_v3.sh

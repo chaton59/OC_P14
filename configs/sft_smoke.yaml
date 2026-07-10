@@ -1,0 +1,32 @@
+# Configuration de TEST DE FUMÉE (smoke test) : valide la chaîne SFT en ~1 min.
+# Ne produit pas un modèle utile ; sert uniquement à vérifier que tout s'exécute.
+base_model: "Qwen/Qwen3-1.7B-Base"
+output_dir: "models/sft-smoke"
+seed: 42
+train_file: "data/processed/sft/train.jsonl"
+eval_file: "data/processed/sft/val.jsonl"
+max_seq_length: 512
+max_train_samples: 32
+max_eval_samples: 8
+max_steps: 3                      # on s'arrête après 3 pas
+load_in_4bit: true
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: ["q_proj", "v_proj"]
+num_train_epochs: 1
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 2
+learning_rate: 0.0002
+warmup_ratio: 0.0
+lr_scheduler_type: "constant"
+weight_decay: 0.0
+max_grad_norm: 1.0
+bf16: true
+gradient_checkpointing: true
+logging_steps: 1
+eval_strategy: "no"
+eval_steps: 50
+save_steps: 1000
+save_total_limit: 1
+report_to: "none"

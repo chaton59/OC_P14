@@ -1,0 +1,62 @@
+# ============================================================================
+#  Hyperparamètres de l'alignement par préférences (DPO) — Semaine 3
+# ============================================================================
+#  Le DPO part du modèle déjà spécialisé par le SFT (son adaptateur LoRA) et
+#  l'affine pour qu'il PRÉFÈRE les réponses prudentes et bien structurées.
+#  Les taux d'apprentissage sont volontairement bien plus faibles qu'en SFT :
+#  on ne veut « pousser » le modèle que légèrement, sans le déstabiliser.
+# ============================================================================
+
+# --- Modèle de départ ---
+base_model: "Qwen/Qwen3-1.7B-Base"        # même base que le SFT
+sft_adapter: "models/sft-lora"            # adaptateur LoRA issu de l'étape SFT
+output_dir: "models/dpo-lora"
+seed: 42
+
+# --- Données préférentielles ---
+train_file: "data/processed/dpo/train.jsonl"
+eval_file: "data/processed/dpo/val.jsonl"
+max_prompt_length: 512                     # longueur max du prompt
+max_length: 768                            # longueur max prompt + réponse (réduit pour la VRAM)
+max_train_samples: null                    # pleine échelle (POC initial : 800)
+max_eval_samples: 150
+
+# --- Quantification ---
+load_in_4bit: false
+
+# --- LoRA (nouvel adaptateur entraîné par-dessus le modèle SFT fusionné) ---
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+lora_target_modules:
+  - "q_proj"
+  - "k_proj"
+  - "v_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+# --- Spécifique DPO ---
+# `beta` contrôle l'écart autorisé avec le modèle de référence (le SFT figé).
+# Plus beta est grand, plus on reste proche du modèle de départ (alignement doux).
+beta: 0.1
+
+# --- Boucle d'entraînement ---
+num_train_epochs: 1
+per_device_train_batch_size: 1            # DPO traite 2 réponses/exemple → plus lourd
+gradient_accumulation_steps: 8
+learning_rate: 0.000005                    # 5e-6, très faible (typique DPO)
+warmup_ratio: 0.1
+lr_scheduler_type: "cosine"
+max_grad_norm: 1.0
+bf16: true
+gradient_checkpointing: true
+
+# --- Journalisation & sauvegardes ---
+logging_steps: 10
+eval_strategy: "steps"
+eval_steps: 50
+save_steps: 100
+save_total_limit: 2
+report_to: "tensorboard"

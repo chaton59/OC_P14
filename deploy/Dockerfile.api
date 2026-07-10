@@ -1,0 +1,46 @@
+# ============================================================================
+#  Image de la PASSERELLE API (FastAPI) — conteneur léger
+# ============================================================================
+#  Cette image n'embarque PAS le modèle : elle relaie les requêtes vers le
+#  serveur vLLM (voir docker-compose.yml). Elle reste donc petite et démarre
+#  vite. Le modèle, lui, tourne dans le conteneur vLLM optimisé pour le GPU.
+# ============================================================================
+FROM python:3.12-slim AS base
+
+# Bonnes pratiques : pas de fichiers .pyc, logs non bufferisés (visibles direct).
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# 1. Dépendances (couche cachée tant que le fichier ne change pas).
+COPY deploy/requirements-serve.txt /app/requirements-serve.txt
+RUN pip install --no-cache-dir -r /app/requirements-serve.txt
+
+# 2. Code source + métadonnées du paquet, puis installation SANS dépendances
+#    (elles sont déjà installées à l'étape précédente).
+COPY pyproject.toml README.md /app/
+COPY src /app/src
+RUN pip install --no-cache-dir --no-deps -e /app
+
+# 3. Utilisateur non-root (sécurité : on n'exécute pas le service en root).
+#    Le journal d'audit (logs/audit.log, exigence de traçabilité) est écrit
+#    sous /app/logs : le dossier doit appartenir à `appuser`, sinon chaque
+#    POST /triage échoue en 500 (PermissionError) alors que /health reste vert.
+RUN useradd --create-home appuser \
+    && mkdir -p /app/logs \
+    && chown -R appuser:appuser /app/logs
+USER appuser
+
+# 4. Configuration par défaut : on parle au service vLLM du compose.
+ENV TRIAGE_INFERENCE_BACKEND=vllm \
+    TRIAGE_VLLM_BASE_URL=http://vllm:8000/v1 \
+    TRIAGE_VLLM_MODEL_NAME=chsa-triage
+
+EXPOSE 8080
+
+# Sonde de santé : Docker redémarre le conteneur si l'API ne répond plus.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD python -c "import httpx,sys; sys.exit(0 if httpx.get('http://localhost:8080/health').status_code==200 else 1)"
+
+CMD ["uvicorn", "triage.serve.api:app", "--host", "0.0.0.0", "--port", "8080"]

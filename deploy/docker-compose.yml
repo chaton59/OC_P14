@@ -1,0 +1,60 @@
+# ============================================================================
+#  Orchestration locale du POC : serveur d'inférence vLLM + passerelle API
+# ============================================================================
+#  Deux services :
+#    1. `vllm` — sert le modèle fusionné via une API compatible OpenAI, sur GPU ;
+#    2. `api`  — la passerelle FastAPI (agent de triage) qui appelle `vllm`.
+#
+#  Lancement :  docker compose -f deploy/docker-compose.yml up --build
+#  Pré-requis : le modèle fusionné dans ../models/qwen3-triage-merged
+#               + NVIDIA Container Toolkit (pour exposer le GPU au conteneur).
+# ============================================================================
+services:
+
+  # --- Serveur d'inférence haute performance ---
+  vllm:
+    image: vllm/vllm-openai:latest
+    container_name: chsa-vllm
+    # On monte le modèle fusionné en lecture seule dans le conteneur.
+    volumes:
+      - ../models/qwen3-triage-merged:/models/chsa-triage:ro
+    command: >
+      --model /models/chsa-triage
+      --served-model-name chsa-triage
+      --max-model-len 2048
+      --gpu-memory-utilization 0.85
+    ports:
+      # Lié à localhost UNIQUEMENT : le serveur vLLM brut (sans garde-fous,
+      # sans audit, sans disclaimer) ne doit pas être exposé au réseau.
+      - "127.0.0.1:8000:8000"   # API OpenAI de vLLM (debug local)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      # `python3` : le binaire `python` n'existe pas dans toutes les images
+      # vllm/vllm-openai → healthcheck toujours KO → l'API ne démarrait jamais.
+      test: ["CMD", "python3", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 120s       # vLLM met du temps à charger le modèle
+
+  # --- Passerelle API (agent de triage) ---
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: chsa-api
+    environment:
+      TRIAGE_INFERENCE_BACKEND: vllm
+      TRIAGE_VLLM_BASE_URL: http://vllm:8000/v1
+      TRIAGE_VLLM_MODEL_NAME: chsa-triage
+    ports:
+      - "8080:8080"
+    depends_on:
+      vllm:
+        condition: service_healthy   # on attend que vLLM soit prêt

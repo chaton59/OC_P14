@@ -1,0 +1,46 @@
+# ============================================================================
+#  CI — Intégration continue : lint + tests à chaque push / pull request
+# ============================================================================
+#  Objectif : garantir qu'aucune régression n'est introduite. On installe
+#  UNIQUEMENT les dépendances légères (pas de torch/GPU) : les tests sont conçus
+#  pour tourner sans modèle ni carte graphique (agent simulé, repli regex…).
+# ============================================================================
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Installation de uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Configuration de Python 3.12
+        run: uv python install 3.12
+
+      - name: Installation des dépendances légères (CI)
+        # On installe le strict nécessaire aux tests + outils qualité.
+        # scikit-learn : requis par le test de non-régression des splits
+        # sans fuite (audit du 10/07) qui exerce réellement data/split.py.
+        run: |
+          uv venv
+          uv pip install -r deploy/requirements-serve.txt pytest pytest-cov ruff scikit-learn
+
+      - name: Lint (ruff)
+        # --no-sync : sans ce drapeau, `uv run` réinstalle TOUT le lock du
+        # projet (torch CUDA, plusieurs Go) et ruine l'installation légère.
+        run: uv run --no-sync ruff check src tests
+
+      - name: Tests unitaires (pytest)
+        # PYTHONPATH=src : on importe le paquet sans l'installer (rapide).
+        env:
+          PYTHONPATH: src
+        run: uv run --no-sync pytest tests -q

@@ -1,0 +1,33 @@
+# Test de fumée DPO : valide la chaîne d'alignement en ~2 min.
+base_model: "Qwen/Qwen3-1.7B-Base"
+sft_adapter: "models/sft-lora"
+output_dir: "models/dpo-smoke"
+seed: 42
+train_file: "data/processed/dpo/train.jsonl"
+eval_file: "data/processed/dpo/val.jsonl"
+max_prompt_length: 384
+max_length: 768
+max_train_samples: 16
+max_eval_samples: 8
+max_steps: 3
+load_in_4bit: false
+lora_r: 8
+lora_alpha: 16
+lora_dropout: 0.05
+lora_target_modules: ["q_proj", "v_proj"]
+beta: 0.1
+num_train_epochs: 1
+per_device_train_batch_size: 1
+gradient_accumulation_steps: 2
+learning_rate: 0.000005
+warmup_ratio: 0.0
+lr_scheduler_type: "constant"
+max_grad_norm: 1.0
+bf16: true
+gradient_checkpointing: true
+logging_steps: 1
+eval_strategy: "no"
+eval_steps: 50
+save_steps: 1000
+save_total_limit: 1
+report_to: "none"

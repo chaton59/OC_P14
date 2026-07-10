@@ -1,0 +1,62 @@
+# ============================================================================
+#  Hyperparamètres du Fine-Tuning Supervisé (SFT) avec LoRA — Semaine 2
+# ============================================================================
+#  Ces valeurs sont calibrées pour un GPU grand public de ~12 Go de VRAM
+#  (RTX 4070). Tout est commenté pour que chaque choix soit compréhensible.
+#  Pour un entraînement « pleine échelle », augmentez `max_train_samples`,
+#  `num_train_epochs` et désactivez éventuellement la quantification 4 bits.
+# ============================================================================
+
+# --- Modèle de base & sorties ---
+base_model: "Qwen/Qwen3-1.7B-Base"      # modèle imposé par la mission
+output_dir: "models/sft-lora"            # où sont sauvegardés l'adaptateur LoRA
+seed: 42                                  # reproductibilité
+
+# --- Données ---
+train_file: "data/processed/sft/train.jsonl"
+eval_file: "data/processed/sft/val.jsonl"
+max_seq_length: 1024                      # longueur max des séquences (tokens)
+# Entraînement PLEINE ÉCHELLE (v3) : tout le jeu d'entraînement.
+# (POC initial : 1200 exemples pour rester dans ~1-2 h de calcul.)
+max_train_samples: null
+max_eval_samples: 200
+
+# --- Quantification (QLoRA) ---
+# Charge les poids du modèle en 4 bits pour diviser l'empreinte mémoire par ~4.
+# Indispensable pour entraîner confortablement un 1.7B sur 12 Go de VRAM.
+load_in_4bit: true
+
+# --- LoRA (Low-Rank Adaptation) ---
+# On ne ré-entraîne pas tout le modèle : on insère de petites matrices de rang
+# faible (`r`) dans les couches d'attention/MLP. ~1 % des paramètres bougent.
+lora_r: 16                                # rang des matrices LoRA
+lora_alpha: 32                            # facteur d'échelle (souvent 2×r)
+lora_dropout: 0.05                        # régularisation (anti sur-apprentissage)
+lora_target_modules:                      # couches où injecter LoRA
+  - "q_proj"
+  - "k_proj"
+  - "v_proj"
+  - "o_proj"
+  - "gate_proj"
+  - "up_proj"
+  - "down_proj"
+
+# --- Boucle d'entraînement ---
+num_train_epochs: 2                       # 2 passes (pleine échelle) ; surveiller l'éval (sur-apprentissage)
+per_device_train_batch_size: 2            # exemples par pas (limité par la VRAM)
+gradient_accumulation_steps: 8            # batch effectif = 2 × 8 = 16
+learning_rate: 0.0002                     # 2e-4, typique pour LoRA
+warmup_ratio: 0.03                        # montée en température du LR
+lr_scheduler_type: "cosine"               # décroissance douce du LR
+weight_decay: 0.0
+max_grad_norm: 1.0                         # clipping des gradients (stabilité)
+bf16: true                                # calcul en bfloat16 (supporté par Ada)
+gradient_checkpointing: true              # économise la VRAM (recalcul activations)
+
+# --- Journalisation & sauvegardes (traçabilité) ---
+logging_steps: 10
+eval_strategy: "steps"
+eval_steps: 50
+save_steps: 100
+save_total_limit: 2                       # ne garde que les 2 derniers checkpoints
+report_to: "tensorboard"                  # courbes consultables via `tensorboard`

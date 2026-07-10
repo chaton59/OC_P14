@@ -1,0 +1,58 @@
+{
+  "n_cases": 200,
+  "accuracy": 0.69,
+  "per_level": {
+    "URGENCE_VITALE": {
+      "precision": 0.69,
+      "recall": 1.0,
+      "f1": 0.817
+    },
+    "URGENCE_MODEREE": {
+      "precision": 0.547,
+      "recall": 0.538,
+      "f1": 0.543
+    },
+    "CONSULTATION_DIFFEREE": {
+      "precision": 0.944,
+      "recall": 0.515,
+      "f1": 0.667
+    }
+  },
+  "safety": {
+    "n_cases": 200,
+    "dangerous_undertriage": 2,
+    "dangerous_undertriage_rate": 0.01,
+    "critical_undertriage": 0,
+    "critical_undertriage_rate": 0.0,
+    "overtriage": 60,
+    "overtriage_rate": 0.3,
+    "unclassified": 0,
+    "dangerous_advice": 0,
+    "dangerous_advice_rate": 0.0,
+    "vital_sensitivity": 1.0,
+    "vital_total": 69
+  },
+  "latency_ms": {
+    "p50": 2334.4,
+    "p95": 2956.3,
+    "mean": 2370.9
+  },
+  "confusion_matrix": {
+    "URGENCE_MODEREE": {
+      "URGENCE_VITALE": 28,
+      "URGENCE_MODEREE": 35,
+      "CONSULTATION_DIFFEREE": 2
+    },
+    "URGENCE_VITALE": {
+      "URGENCE_VITALE": 69,
+      "URGENCE_MODEREE": 0,
+      "CONSULTATION_DIFFEREE": 0
+    },
+    "CONSULTATION_DIFFEREE": {
+      "CONSULTATION_DIFFEREE": 34,
+      "URGENCE_MODEREE": 29,
+      "URGENCE_VITALE": 3
+    }
+  },
+  "model_path": "configuré"
+}

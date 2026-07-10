@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<!-- ==========================================================================
+  Historique des interactions — POC Agent de Triage Médical (CHSA)
+  ---------------------------------------------------------------------------
+  Vue « lisible » du journal d'audit (logs/audit.log), servie sur GET
+  /ui/history. Sans framework ni dépendance, comme la page de chat : elle
+  consomme GET /audit (chemin relatif ../audit, la page vivant sous /ui/) et
+  affiche une interaction par ligne, de la plus récente à la plus ancienne.
+========================================================================== -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHSA — Historique des interactions (POC)</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --panel: #ffffff; --text: #1f2933; --muted: #64748b;
+    --accent: #0f6fff; --border: #e2e8f0;
+    --rouge: #dc2626; --orange: #ea580c; --vert: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12.5px; }
+  nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+  nav a, nav button, nav select {
+    color: var(--muted); font: inherit; font-size: 12.5px; text-decoration: none;
+    padding: 5px 9px; border: 1px solid var(--border); border-radius: 8px;
+    background: var(--panel); cursor: pointer;
+  }
+  nav a:hover, nav button:hover { color: var(--accent); border-color: var(--accent); }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  #resume { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+  table {
+    width: 100%; border-collapse: collapse; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    font-size: 13.5px;
+  }
+  th, td { padding: 8px 12px; text-align: left; vertical-align: top; }
+  thead th {
+    background: var(--bg); color: var(--muted); font-size: 12px;
+    text-transform: uppercase; letter-spacing: .04em;
+    border-bottom: 1px solid var(--border); white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); }
+  tbody tr:last-child { border-bottom: 0; }
+  tbody tr:hover { background: #f8fafc; }
+  td.ts { white-space: nowrap; color: var(--muted); font-size: 12.5px; }
+  td.msg { max-width: 380px; overflow: hidden; text-overflow: ellipsis;
+           white-space: nowrap; }
+  td.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px;
+           font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .badge.rouge  { background: #fee2e2; color: var(--rouge); }
+  .badge.orange { background: #ffedd5; color: var(--orange); }
+  .badge.vert   { background: #dcfce7; color: var(--vert); }
+  .badge.gris   { background: var(--bg); color: var(--muted); font-weight: 500; }
+  .flags { color: var(--rouge); font-size: 12.5px; }
+  .vide { color: var(--muted); }
+  #etat { color: var(--muted); font-size: 13.5px; padding: 24px; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🕘 Historique des interactions</h1>
+    <div class="sub">Journal d'audit du POC — une ligne par interaction, la plus récente en premier.</div>
+  </div>
+  <nav>
+    <label for="limit" style="align-self:center;color:var(--muted);font-size:12.5px">Dernières</label>
+    <select id="limit">
+      <option>20</option><option selected>50</option><option>200</option><option>1000</option>
+    </select>
+    <button id="refresh" title="Recharger le journal">⟳ Actualiser</button>
+    <a id="raw" href="../audit?limit=50" target="_blank" title="Le journal brut (JSON)">{ } JSON</a>
+    <a href="../ui" title="Retour au chat de démonstration">💬 Chat</a>
+  </nav>
+</header>
+
+<main>
+  <div id="resume"></div>
+  <table hidden id="tbl">
+    <thead><tr>
+      <th>Horodatage</th><th>Type</th><th>Message patient</th><th>Niveau</th>
+      <th>Signes d'alerte</th><th title="Confiance de l'agent">Conf.</th>
+      <th title="Latence de bout en bout">Latence</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <div id="etat">Chargement…</div>
+</main>
+
+<script>
+"use strict";
+const NIVEAUX = {  // libellé court + couleur par niveau canonique
+  URGENCE_VITALE:       {txt: "Vitale",   cls: "rouge"},
+  URGENCE_MODEREE:      {txt: "Modérée",  cls: "orange"},
+  CONSULTATION_DIFFEREE:{txt: "Différée", cls: "vert"},
+};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+function fmtDate(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? esc(iso || "?")
+    : d.toLocaleDateString("fr-FR") + " " + d.toLocaleTimeString("fr-FR");
+}
+
+function row(r) {
+  const tr = document.createElement("tr");
+  const niv = NIVEAUX[r.triage_level];
+  const type = r.type === "triage"
+    ? '<span class="badge gris">verdict</span>'
+    : '<span class="badge gris">relance</span>';
+  const niveau = niv
+    ? `<span class="badge ${niv.cls}">${niv.txt}</span>`
+      + (r.safety_override ? ' <span class="flags" title="Niveau forcé par le filet de sécurité">🛡</span>' : "")
+    : '<span class="vide">—</span>';
+  const flags = (r.red_flags && r.red_flags.length)
+    ? `<span class="flags">🚩 ${r.red_flags.map(esc).join(", ")}</span>`
+    : '<span class="vide">—</span>';
+  const msg = r.message || (r.questions || []).join(" ");
+  tr.innerHTML = `
+    <td class="ts">${fmtDate(r.timestamp)}</td>
+    <td>${type}</td>
+    <td class="msg" title="${esc(msg)}">${esc(msg)}</td>
+    <td>${niveau}</td>
+    <td>${flags}</td>
+    <td class="num">${r.confidence ?? "—"}</td>
+    <td class="num">${r.latency_ms != null ? Math.round(r.latency_ms) + " ms" : "—"}</td>`;
+  return tr;
+}
+
+async function load() {
+  const limit = document.getElementById("limit").value;
+  document.getElementById("raw").href = "../audit?limit=" + limit;
+  const etat = document.getElementById("etat");
+  const tbl = document.getElementById("tbl");
+  const rows = document.getElementById("rows");
+  etat.hidden = false; etat.textContent = "Chargement…"; tbl.hidden = true;
+  try {
+    const resp = await fetch("../audit?limit=" + limit);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const items = (await resp.json()).interactions || [];
+    rows.innerHTML = "";
+    // Le journal est chronologique : on affiche la plus récente en premier.
+    for (const r of items.reverse()) rows.appendChild(row(r));
+    const verdicts = items.filter(r => r.type === "triage").length;
+    document.getElementById("resume").textContent =
+      `${items.length} interaction(s) affichée(s), dont ${verdicts} verdict(s).`;
+    if (items.length) { tbl.hidden = false; etat.hidden = true; }
+    else { etat.textContent = "Journal vide — aucune interaction enregistrée pour l'instant."; }
+  } catch (e) {
+    etat.textContent = "❌ Impossible de lire le journal (" + e.message
+      + "). Vérifiez que le serveur est démarré (make api).";
+  }
+}
+
+document.getElementById("refresh").addEventListener("click", load);
+document.getElementById("limit").addEventListener("change", load);
+load();
+</script>
+</body>
+</html>

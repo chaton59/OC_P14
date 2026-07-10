@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<!-- ==========================================================================
+  Page de démonstration du POC — Agent de Triage Médical (CHSA)
+  ---------------------------------------------------------------------------
+  Un chat minimaliste, SANS framework ni dépendance externe, servi par l'API
+  FastAPI elle-même (GET /ui). Il consomme l'endpoint POST /chat :
+    1. le patient décrit ses symptômes ;
+    2. l'agent pose éventuellement 1-2 questions de relance (questionnaire
+       adaptatif) — la page réinjecte `history` et `asked_dimensions` ;
+    3. l'agent rend un verdict structuré (niveau, délai, explication) affiché
+       sous forme de carte colorée (rouge / orange / vert).
+  Même origine que l'API → aucun besoin de CORS.
+========================================================================== -->
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CHSA — Agent de Triage Médical (POC)</title>
+<style>
+  :root {
+    --bg: #f4f6f8; --panel: #ffffff; --text: #1f2933; --muted: #64748b;
+    --accent: #0f6fff; --border: #e2e8f0;
+    --rouge: #dc2626; --orange: #ea580c; --vert: #16a34a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; height: 100vh;
+  }
+  header {
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 12px 20px; display: flex; align-items: center; gap: 12px;
+  }
+  header h1 { font-size: 17px; margin: 0; }
+  header .sub { color: var(--muted); font-size: 12.5px; }
+  nav { margin-left: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+  nav a { color: var(--muted); font-size: 12.5px; text-decoration: none;
+          padding: 5px 9px; border: 1px solid var(--border); border-radius: 8px; }
+  nav a:hover { color: var(--accent); border-color: var(--accent); }
+  #status { font-size: 12.5px; color: var(--muted); }
+  #status .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                 background: #cbd5e1; margin-right: 5px; }
+  #status.ok .dot { background: var(--vert); }
+  #status.ko .dot { background: var(--rouge); }
+  #chat { flex: 1; overflow-y: auto; padding: 20px; max-width: 780px; width: 100%;
+          margin: 0 auto; }
+  .msg { max-width: 82%; padding: 10px 14px; border-radius: 12px; margin: 6px 0;
+         white-space: pre-wrap; word-wrap: break-word; }
+  .patient { background: var(--accent); color: #fff; margin-left: auto;
+             border-bottom-right-radius: 4px; }
+  .agent { background: var(--panel); border: 1px solid var(--border);
+           border-bottom-left-radius: 4px; }
+  .verdict { border-left: 6px solid var(--muted); }
+  .verdict.rouge  { border-left-color: var(--rouge); }
+  .verdict.orange { border-left-color: var(--orange); }
+  .verdict.vert   { border-left-color: var(--vert); }
+  .verdict .niveau { font-weight: 700; font-size: 15.5px; }
+  .verdict.rouge  .niveau { color: var(--rouge); }
+  .verdict.orange .niveau { color: var(--orange); }
+  .verdict.vert   .niveau { color: var(--vert); }
+  .verdict .delai { color: var(--muted); font-size: 13px; margin-bottom: 6px; }
+  .verdict .flags { font-size: 13px; color: var(--rouge); margin-top: 6px; }
+  .verdict .meta { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .verdict .disclaimer { color: var(--muted); font-size: 11.5px; margin-top: 8px;
+                         border-top: 1px dashed var(--border); padding-top: 6px; }
+  .typing { color: var(--muted); font-style: italic; }
+  footer { background: var(--panel); border-top: 1px solid var(--border); padding: 12px 20px; }
+  #bar { display: flex; gap: 8px; max-width: 780px; margin: 0 auto; }
+  #input { flex: 1; padding: 10px 14px; border: 1px solid var(--border);
+           border-radius: 10px; font: inherit; outline: none; }
+  #input:focus { border-color: var(--accent); }
+  button { padding: 10px 18px; border: 0; border-radius: 10px; font: inherit;
+           cursor: pointer; }
+  #send { background: var(--accent); color: #fff; }
+  #send:disabled { opacity: .5; cursor: default; }
+  #reset { background: transparent; color: var(--muted); }
+  .warn { max-width: 780px; margin: 0 auto 6px; font-size: 11.5px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🏥 CHSA — Agent de Triage Médical</h1>
+    <div class="sub">Proof of Concept — Qwen3-1.7B (SFT + DPO). Ne remplace pas un avis médical.</div>
+  </div>
+  <!-- Liens utiles : mêmes chemins relatifs que les fetch() (page servie sur /ui). -->
+  <nav>
+    <a href="docs" target="_blank" title="Documentation interactive de l'API (Swagger)">📚 API</a>
+    <a href="redoc" target="_blank" title="Documentation de l'API (ReDoc)">📖 ReDoc</a>
+    <a href="ui/history" target="_blank" title="Journal d'audit mis en forme (une interaction par ligne)">🕘 Historique</a>
+    <a href="health" target="_blank" title="Sonde de vivacité (JSON)">💚 Santé</a>
+  </nav>
+  <div id="status"><span class="dot"></span><span id="status-text">connexion…</span></div>
+</header>
+
+<div id="chat"></div>
+
+<footer>
+  <div class="warn">⚠️ Démonstrateur : en cas d'urgence réelle, appelez le 15 (SAMU).</div>
+  <div id="bar">
+    <input id="input" placeholder="Décrivez vos symptômes… (ex : douleur dans la poitrine depuis 1 h)"
+           autocomplete="off" autofocus>
+    <button id="send">Envoyer</button>
+    <button id="reset" title="Nouvelle conversation">↺ Réinitialiser</button>
+  </div>
+</footer>
+
+<script>
+"use strict";
+const chat = document.getElementById("chat");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+
+// État de la conversation, réinjecté à chaque tour dans POST /chat.
+let history = [];          // [{role: "user"|"assistant", content: "…"}]
+let askedDimensions = [];  // renvoyé par l'API à chaque relance
+let done = false;          // verdict rendu → on fige la conversation
+
+function addMsg(text, cls) {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+function addVerdict(r) {
+  const div = document.createElement("div");
+  div.className = "msg agent verdict " + (r.couleur || "");
+  const flags = (r.red_flags && r.red_flags.length)
+    ? `<div class="flags">🚩 Signes d'alerte : ${r.red_flags.map(esc).join(", ")}</div>` : "";
+  const override = r.safety_override
+    ? `<div class="flags">Filet de sécurité activé (niveau forcé par prudence).</div>` : "";
+  div.innerHTML = `
+    <div class="niveau">${esc(r.label || r.triage_level)} — niveau ${esc(r.code || "?")}</div>
+    <div class="delai">${esc(r.delai || "")}</div>
+    <div>${esc(r.explanation || "")}</div>
+    ${flags}${override}
+    <div class="meta">confiance : ${r.confidence ?? "?"} · latence : ${r.latency_ms} ms · id : ${esc(r.interaction_id || "")}</div>
+    <div class="disclaimer">${esc(r.disclaimer || "")}</div>`;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function submit() {
+  const text = input.value.trim();
+  if (!text || done || send.disabled) return;
+  input.value = "";
+  addMsg(text, "patient");
+  const typing = addMsg("L'agent analyse…", "agent typing");
+  send.disabled = true;
+  try {
+    const resp = await fetch("chat", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({message: text, history, asked_dimensions: askedDimensions}),
+    });
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const r = await resp.json();
+    typing.remove();
+    history.push({role: "user", content: text});
+    if (r.type === "follow_up") {
+      askedDimensions = r.asked_dimensions || askedDimensions;
+      for (const q of (r.follow_up_questions || [])) {
+        addMsg(q, "agent");
+        history.push({role: "assistant", content: q});
+      }
+    } else {
+      addVerdict(r);
+      done = true;
+      addMsg("Conversation terminée — cliquez sur « Réinitialiser » pour un nouveau cas.", "agent typing");
+    }
+  } catch (e) {
+    typing.remove();
+    addMsg("❌ Erreur : impossible de joindre l'API (" + e.message + "). "
+           + "Vérifiez que le serveur est démarré (make api).", "agent");
+  } finally {
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+send.addEventListener("click", submit);
+input.addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+document.getElementById("reset").addEventListener("click", () => {
+  history = []; askedDimensions = []; done = false; chat.innerHTML = "";
+  greet(); input.focus();
+});
+
+function greet() {
+  addMsg("Bonjour, je suis l'assistant de triage du CHSA. "
+       + "Décrivez vos symptômes : depuis quand, à quelle intensité, et ce que vous ressentez.", "agent");
+}
+
+// Sonde de vivacité (affichée dans l'en-tête).
+(async () => {
+  const st = document.getElementById("status");
+  const stText = document.getElementById("status-text");
+  try {
+    const r = await fetch("health");
+    const j = await r.json();
+    st.className = "ok";
+    stText.textContent = "API en ligne · backend " + j.backend + " · v" + j.version;
+  } catch {
+    st.className = "ko";
+    stText.textContent = "API injoignable";
+  }
+})();
+greet();
+</script>
+</body>
+</html>

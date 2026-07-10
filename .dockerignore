@@ -1,0 +1,14 @@
+# Évite d'envoyer des fichiers lourds/inutiles au démon Docker (build plus rapide).
+.venv/
+__pycache__/
+*.pyc
+.git/
+.github/
+data/
+models/
+logs/
+notebooks/
+reports/figures/
+.pytest_cache/
+.ruff_cache/
+*.log

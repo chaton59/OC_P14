@@ -1,0 +1,69 @@
+# ============================================================================
+#  CD — Déploiement continu : construction & publication de l'image API
+# ============================================================================
+#  À chaque push sur `main` (ou tag de version), on construit l'image Docker de
+#  la passerelle API et on la publie sur le GitHub Container Registry (GHCR).
+#  L'étape de déploiement effectif sur le cloud est laissée en exemple commenté
+#  (elle dépend de l'infrastructure cible et de secrets que l'on ne committe pas).
+# ============================================================================
+name: Build & Publish API image
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*"]
+  workflow_dispatch:        # permet un déclenchement manuel depuis l'UI GitHub
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}-api
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write        # nécessaire pour publier sur GHCR
+    steps:
+      - name: Récupération du code
+        uses: actions/checkout@v4
+
+      - name: Connexion au registre GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}   # jeton fourni automatiquement
+
+      - name: Métadonnées (tags & labels de l'image)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha
+
+      - name: Construction et publication de l'image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile.api
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # --- Déploiement effectif (exemple, à adapter à votre cloud) ----------
+      # - name: Déploiement sur la VM GPU
+      #   uses: appleboy/ssh-action@v1
+      #   with:
+      #     host: ${{ secrets.DEPLOY_HOST }}
+      #     username: ${{ secrets.DEPLOY_USER }}
+      #     key: ${{ secrets.DEPLOY_SSH_KEY }}
+      #     script: |
+      #       cd /opt/chsa-triage
+      #       docker compose -f deploy/docker-compose.yml pull
+      #       docker compose -f deploy/docker-compose.yml up -d
